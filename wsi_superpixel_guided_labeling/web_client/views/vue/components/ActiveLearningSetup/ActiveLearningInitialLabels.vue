@@ -7,6 +7,7 @@ import { ViewerWidget } from '@girder/large_image_annotation/views';
 import ColorPickerInput from '@girder/histomicsui/vue/components/ColorPickerInput.vue';
 
 import MouseAndKeyboardControls from '../MouseAndKeyboardControls.vue';
+import { store } from '../ActiveLearning/store.js';
 
 // Define some helpful constants for adding categories
 const boundaryColor = 'rgba(0, 0, 0, 1)';
@@ -27,6 +28,8 @@ export default Vue.extend({
     data() {
         return {
             hasLoaded: false,
+            showLabelingContainer: true,
+            showInfoContainer: true,
 
             // data tracking current categories/currently active category
             categories: [],
@@ -43,7 +46,8 @@ export default Vue.extend({
             viewerWidget: null,
             overlayLayer: null,
             pixelmapRendered: false,
-            pixelmapPaintValue: null
+            pixelmapPaintValue: null,
+            pixelmapPaintBrush: false
         };
     },
     computed: {
@@ -94,6 +98,9 @@ export default Vue.extend({
                 }
             });
             return counts;
+        },
+        hotkeys() {
+            return store.hotkeys;
         }
     },
     watch: {
@@ -118,6 +125,18 @@ export default Vue.extend({
         currentImageId() {
             this.superpixelAnnotation = this.annotationsByImageId[this.currentImageId].labels;
             this.setupViewer();
+        },
+        pixelmapPaintBrush(activated) {
+            // Panning is typically by with left-click and continuous painting
+            // by shift+left-click. When the paint brush is enabled swap these
+            // interactions.
+            const interactor = this.viewerWidget.viewer.interactor();
+            const actions = interactor.options().actions;
+            _.map(actions, (action) => {
+                if (action.action === 'geo_action_pan') {
+                    action.modifiers.shift = activated;
+                }
+            });
         }
     },
     mounted() {
@@ -276,7 +295,7 @@ export default Vue.extend({
             if (
                 overlayElement.get('type') !== 'pixelmap' ||
                 !event.mouse.buttons.left ||
-                !event.mouse.modifiers.shift ||
+                (!this.pixelmapPaintBrush && !event.mouse.modifiers.shift) ||
                 !this.currentCategoryFormValid
             ) {
                 return;
@@ -287,7 +306,7 @@ export default Vue.extend({
             if (
                 overlayElement.get('type') !== 'pixelmap' ||
                 !event.mouse.buttons.left ||
-                !event.mouse.modifiers.shift ||
+                (!this.pixelmapPaintBrush && !event.mouse.modifiers.shift) ||
                 !this.currentCategoryFormValid
             ) {
                 return;
@@ -354,12 +373,6 @@ export default Vue.extend({
         /*************************
          * RESPOND TO USER INPUT *
          *************************/
-        nextCategory() {
-            this.categoryIndex += 1;
-        },
-        previousCategory() {
-            this.categoryIndex -= 1;
-        },
         addCategory() {
             this.categories.push({
                 category: {
@@ -401,162 +414,251 @@ export default Vue.extend({
 </script>
 
 <template>
-  <div class="h-al-setup-categories">
-    <div
-      class="h-setup-categories-body"
-    >
+  <div>
+    <div :class="{'h-labeling-container': true, 'h-collapsed': !showLabelingContainer}">
+      <div :class="{'h-container-title': showLabelingContainer}">
+        <button
+          class="h-collapse-button"
+          @click="showLabelingContainer = !showLabelingContainer"
+        >
+          <i class="icon-tags" />
+        </button>
+        <h4 v-if="showLabelingContainer">
+          Labeling
+        </h4>
+        <button
+          v-if="showLabelingContainer"
+          :class="['btn btn-primary', pixelmapPaintBrush && 'active h-active-em']"
+          @click="pixelmapPaintBrush = !pixelmapPaintBrush"
+        >
+          <i class="icon-brush" />
+        </button>
+      </div>
       <div
-        v-if="pixelmapRendered"
-        class="h-add-new-category"
+        v-if="showLabelingContainer"
+        class="h-al-setup-categories"
       >
-        <div class="h-category-form">
-          <div class="h-form-controls">
-            <div class="form-group">
-              <label for="category-label">Label</label>
-              <input
-                id="category-label"
-                v-model="currentCategoryLabel"
-                class="form-control input-sm h-active-learning-input"
-              >
+        <div v-if="pixelmapRendered">
+          <div class="h-category-form">
+            <div class="h-form-controls">
+              <div class="form-group">
+                <label for="currentImage">Image</label>
+                <select
+                  id="currentImage"
+                  v-model="currentImageId"
+                  class="h-al-image-select"
+                >
+                  <option
+                    v-for="imageId in Object.keys(imageNamesById)"
+                    :key="imageId"
+                    :value="imageId"
+                  >
+                    {{ imageNamesById[imageId] }}
+                  </option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="category-label">Label</label>
+                <input
+                  id="category-label"
+                  v-model="currentCategoryLabel"
+                  class="form-control input-sm"
+                >
+              </div>
+              <div class="form-group">
+                <label for="fill-color">Fill Color</label>
+                <color-picker-input
+                  :key="categoryIndex"
+                  v-model="currentCategoryFillColor"
+                  :color="currentCategoryFillColor"
+                />
+              </div>
             </div>
-            <div class="form-group">
-              <label for="fill-color">Fill Color</label>
-              <color-picker-input
-                :key="categoryIndex"
-                v-model="currentCategoryFillColor"
-                class="h-active-learning-input"
-                :color="currentCategoryFillColor"
-              />
-            </div>
-          </div>
-          <div class="h-error-messages">
-            <p
-              v-if="!currentCategoryFormValid || !currentLabelsValid"
-              class="form-validation-error"
-            >
-              Please fix all errors to continue
-            </p>
-            <ul v-if="currentFormErrors.length > 0">
-              <li
-                v-for="error in currentFormErrors"
-                :key="error"
+            <div class="h-error-messages">
+              <p
+                v-if="!currentCategoryFormValid || !currentLabelsValid"
                 class="form-validation-error"
               >
-                {{ error }}
-              </li>
-            </ul>
-            <ul v-if="currentLabelingErrors.length > 0">
-              <li
-                v-for="error in currentLabelingErrors"
-                :key="error"
-                class="form-validation-error"
-              >
-                {{ error }}
-              </li>
-            </ul>
+                Please fix all errors to continue
+              </p>
+              <ul v-if="currentFormErrors.length > 0">
+                <li
+                  v-for="error in currentFormErrors"
+                  :key="error"
+                  class="form-validation-error"
+                >
+                  {{ error }}
+                </li>
+              </ul>
+              <ul v-if="currentLabelingErrors.length > 0">
+                <li
+                  v-for="error in currentLabelingErrors"
+                  :key="error"
+                  class="form-validation-error"
+                >
+                  {{ error }}
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
-        <button
-          class="btn btn-primary h-previous-category-btn"
-          :disabled="categoryIndex === 0 || !currentCategoryFormValid"
-          @click="previousCategory"
-        >
-          Previous
-        </button>
-        <button
-          class="btn btn-primary h-next-category-btn"
-          :disabled="categoryIndex >= categories.length - 1 || !currentCategoryFormValid"
-          @click="nextCategory"
-        >
-          Next
-        </button>
-        <button
-          class="btn btn-primary h-add-category-btn"
-          :disabled="!currentCategoryFormValid"
-          @click="addCategory"
-        >
-          Add Category
-        </button>
-        <button
-          class="btn btn-primary h-start-training-btn"
-          :disabled="!currentCategoryFormValid || !currentLabelsValid"
-          @click="beginTraining"
-        >
-          Begin training
-        </button>
-        <div class="h-al-image-selector">
-          <span>Image: </span>
-          <select
-            v-model="currentImageId"
-            class="h-al-image-select"
+          <button
+            class="btn btn-primary btn-block"
+            :disabled="!currentCategoryFormValid"
+            @click="addCategory"
           >
-            <option
-              v-for="imageId in Object.keys(imageNamesById)"
-              :key="imageId"
-              :value="imageId"
-            >
-              {{ imageNamesById[imageId] }}
-            </option>
-          </select>
+            Add Category
+          </button>
+          <div>
+            <table class="h-labels-table">
+              <tr>
+                <th><i class="icon-keyboard" /></th>
+                <th>Label</th>
+                <th>Superpixels</th>
+                <th />
+              </tr>
+              <tr
+                v-for="(key, index) in Object.keys(labeledSuperpixelCounts)"
+                :key="index"
+                @click="categoryIndex = index"
+              >
+                <td>{{ hotkeys[index + 1] }}</td>
+                <td>{{ labeledSuperpixelCounts[key].label }}</td>
+                <td>{{ labeledSuperpixelCounts[key].count }}</td>
+                <td>
+                  <i
+                    class="icon-stop"
+                    :style="{'color': categories[index].category.fillColor}"
+                  />
+                </td>
+              </tr>
+            </table>
+          </div>
+          <button
+            class="btn btn-primary btn-block"
+            :disabled="!currentCategoryFormValid || !currentLabelsValid"
+            @click="beginTraining"
+          >
+            Begin training
+          </button>
         </div>
       </div>
-      <div
-        ref="map"
-        class="h-setup-categories-map"
-      />
     </div>
-    <div class="h-setup-categories-information">
-      <mouse-and-keyboard-controls :active-learning-setup="true" />
-      <div class="h-category-setup-progress">
-        <div
-          v-for="(key, index) in Object.keys(labeledSuperpixelCounts)"
-          :key="index"
-        >
-          {{ labeledSuperpixelCounts[key].label }}: {{ labeledSuperpixelCounts[key].count }} superpixels labeled
-        </div>
-      </div>
+    <div
+      ref="map"
+      class="h-setup-categories-map"
+    />
+    <div :class="{'h-setup-categories-information': true, 'h-collapsed': !showInfoContainer}">
+      <mouse-and-keyboard-controls
+        v-if="showInfoContainer"
+        :active-learning-setup="true"
+      />
+      <button
+        class="h-collapse-button"
+        @click="showInfoContainer = !showInfoContainer"
+      >
+        <i class="icon-info-circled" />
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.h-al-setup-categories {
-    width: 100%;
-    height: 100%;
+.h-labeling-container {
+    z-index: 1000;
     position: absolute;
+    top: 5px;
+    left: 5px;
+    width: 300px;
     display: flex;
+    flex-direction: column;
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 5px 5px 5px rgba(0, 0, 0, 0.5);
+    padding: 5px;
 }
+
+.h-collapsed {
+    max-width: fit-content;
+}
+
+.h-collapse-button {
+    border: none;
+    background-color: transparent;
+    width: fit-content;
+    height: fit-content;
+}
+
+.h-container-title {
+    display: flex;
+    background-color: #f6f6f6;
+    border-radius: 5px;
+    align-items: center;
+}
+
+h4 {
+    margin: 10px auto;
+}
+
+.h-al-setup-categories {
+    border-radius: 5px;
+}
+
+.h-al-image-select {
+    width: 100%;
+    padding: 5px 10px;
+}
+
 .h-setup-categories-information {
-    width: 33%;
-    height: 100%;
+    z-index: 1000;
+    position: absolute;
+    top: 5px;
+    right: 20px;
+    width: 300px;
+    display: flex;
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 5px 5px 5px rgba(0, 0, 0, 0.5);
+    padding: 5px;
+}
+
+.h-setup-categories-map {
+    min-height: 100vh;
+    border: 1px solid #f0f0f0;
+}
+
+.h-active-em {
+    box-shadow: inset 3px 3px 3px rgba(0, 0, 0, 0.5);
+}
+
+.h-form-controls {
+    max-width: 550px;
     display: flex;
     flex-direction: column;
 }
 
-.h-setup-categories-body {
-    width: 67%;
+.h-category-form {
+   display: flex;
+   flex-direction: column;
 }
 
-.h-setup-categories-map {
-    height: 600px;
-    border: 1px solid #f0f0f0;
+.h-labels-table {
+    margin: 5px 0px;
+    width: 100%;
+    text-align-last: center;
 }
-.h-al-image-selector {
-    display: block;
-    padding-top: 8px;
+
+td, th {
+    padding: 0px 2px;
 }
-.h-form-controls {
-  width: 550px;
+
+tr:nth-child(even) {
+  background-color: #dddddd;
 }
-.h-active-learning-input {
-    width: 90%;
-}
-.h-category-form {
-  display: flex;
-}
+
 .h-error-messages {
   padding-top: 25px;
 }
+
 .form-validation-error {
     color: red;
 }
