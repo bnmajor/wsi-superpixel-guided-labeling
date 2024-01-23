@@ -203,7 +203,7 @@ export default Vue.extend({
         keydownListener(event) {
             const index = this.hotkeys.findIndex((k) => event.key === k);
             if (index !== -1) {
-                this.categoryIndex = index;
+                this.categoryIndex = index - 1;
             }
         },
         /**
@@ -433,23 +433,35 @@ export default Vue.extend({
 <template>
   <div>
     <div :class="{'h-labeling-container': true, 'h-collapsed': !showLabelingContainer}">
-      <div :class="{'h-container-title': showLabelingContainer}">
+      <div class="h-container-title">
         <button
           class="h-collapse-button"
           @click="showLabelingContainer = !showLabelingContainer"
         >
-          <i class="icon-tags" />
+          <i v-if="showLabelingContainer" class="icon-angle-double-left" />
+          <i v-else class="icon-angle-double-right" />
         </button>
         <h4 v-if="showLabelingContainer">
+          <i class="icon-tags" />
           Labeling
         </h4>
-        <button
-          v-if="showLabelingContainer"
-          :class="['btn btn-primary', pixelmapPaintBrush && 'active h-active-em']"
-          @click="pixelmapPaintBrush = !pixelmapPaintBrush"
-        >
-          <i class="icon-brush" />
-        </button>
+        <i v-else class="icon-tags" />
+        <div>
+          <button
+            v-if="showLabelingContainer"
+            :class="['btn btn-primary', !pixelmapPaintBrush && 'active h-active-em']"
+            @click="pixelmapPaintBrush = !pixelmapPaintBrush"
+          >
+            <i class="icon-move" />
+          </button>
+          <button
+            v-if="showLabelingContainer"
+            :class="['btn btn-primary', pixelmapPaintBrush && 'active h-active-em']"
+            @click="pixelmapPaintBrush = !pixelmapPaintBrush"
+          >
+            <i class="icon-brush" />
+          </button>
+        </div>
       </div>
       <div
         v-if="showLabelingContainer"
@@ -458,7 +470,7 @@ export default Vue.extend({
         <div v-if="pixelmapRendered">
           <div class="h-category-form">
             <div class="h-form-controls">
-              <div class="form-group">
+              <div>
                 <label for="currentImage">Image</label>
                 <select
                   id="currentImage"
@@ -474,7 +486,7 @@ export default Vue.extend({
                   </option>
                 </select>
               </div>
-              <div class="form-group">
+              <div>
                 <label for="category-label">Label</label>
                 <input
                   id="category-label"
@@ -482,7 +494,7 @@ export default Vue.extend({
                   class="form-control input-sm"
                 >
               </div>
-              <div class="form-group">
+              <div>
                 <label for="fill-color">Fill Color</label>
                 <color-picker-input
                   :key="categoryIndex"
@@ -531,14 +543,14 @@ export default Vue.extend({
                 <th><i class="icon-keyboard" /></th>
                 <th>Label</th>
                 <th>Superpixels</th>
-                <th />
-                <th />
+                <!-- <th />
+                <th /> -->
               </tr>
               <tr
                 v-for="(key, index) in Object.keys(labeledSuperpixelCounts)"
                 :key="index"
                 @click="categoryIndex = index"
-                class="h-selected-row"
+                :class="{'h-selected-row': categoryIndex === index}"
               >
                 <td>{{ hotkeys[index + 1] }}</td>
                 <td>{{ labeledSuperpixelCounts[key].label }}</td>
@@ -549,11 +561,11 @@ export default Vue.extend({
                     :style="{'color': categories[index].category.fillColor}"
                   />
                 </td>
-                <td>
+                <!-- <td>
                   <button class="btn h-table-button" @click="deleteCategory">
                     <i class="icon-trash" />
                   </button>
-                </td>
+                </td> -->
               </tr>
             </table>
           </div>
@@ -680,7 +692,7 @@ tr:nth-child(even) {
 }
 
 .h-selected-row {
-    background-color: rgba(255, 255, 0, 0.5);
+    font-weight: bold;
 }
 
 .h-error-messages {
