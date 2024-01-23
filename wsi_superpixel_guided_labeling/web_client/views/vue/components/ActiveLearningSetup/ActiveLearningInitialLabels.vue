@@ -140,9 +140,13 @@ export default Vue.extend({
         }
     },
     mounted() {
+        window.addEventListener('keydown', this.keydownListener);
         this.currentImageId = Object.keys(this.imageNamesById)[0];
         this.superpixelAnnotation = this.annotationsByImageId[this.currentImageId].labels;
         this.setupViewer();
+    },
+    destroyed() {
+        window.removeEventListener('keydown', this.keydownListener);
     },
     methods: {
         /***********************************
@@ -195,6 +199,12 @@ export default Vue.extend({
             this.viewerWidget.on('g:mouseUpAnnotationOverlay', this.clearPixelmapPaintValue);
             this.viewerWidget.viewer.interactor().removeAction(geo.geo_action.zoomselect);
             this.synchronizeCategories();
+        },
+        keydownListener(event) {
+            const index = this.hotkeys.findIndex((k) => event.key === k);
+            if (index !== -1) {
+                this.categoryIndex = index;
+            }
         },
         /**
          * Parse existing label annotations to populate the categories used for labeling.
@@ -520,6 +530,7 @@ export default Vue.extend({
                 v-for="(key, index) in Object.keys(labeledSuperpixelCounts)"
                 :key="index"
                 @click="categoryIndex = index"
+                class="h-selected-row"
               >
                 <td>{{ hotkeys[index + 1] }}</td>
                 <td>{{ labeledSuperpixelCounts[key].label }}</td>
@@ -652,7 +663,11 @@ td, th {
 }
 
 tr:nth-child(even) {
-  background-color: #dddddd;
+    background-color: #dddddd;
+}
+
+.h-selected-row {
+    background-color: rgba(255, 255, 0, 0.5);
 }
 
 .h-error-messages {
