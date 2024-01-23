@@ -394,6 +394,13 @@ export default Vue.extend({
             });
             this.categoryIndex = this.categories.length - 1;
         },
+        deleteCategory() {
+            // Remove object and idx matching category from this.categories
+            this.categories.splice(this.categoryIndex, 1);
+            // Call synchronizeCategories - this will: Update annotationsByImageId
+            // labels, update backboneParent, update the visualization
+            this.synchronizeCategories();
+        },
         /***********
          * UTILITY *
          ***********/
@@ -525,6 +532,7 @@ export default Vue.extend({
                 <th>Label</th>
                 <th>Superpixels</th>
                 <th />
+                <th />
               </tr>
               <tr
                 v-for="(key, index) in Object.keys(labeledSuperpixelCounts)"
@@ -540,6 +548,11 @@ export default Vue.extend({
                     class="icon-stop"
                     :style="{'color': categories[index].category.fillColor}"
                   />
+                </td>
+                <td>
+                  <button class="btn h-table-button" @click="deleteCategory">
+                    <i class="icon-trash" />
+                  </button>
                 </td>
               </tr>
             </table>
@@ -675,6 +688,12 @@ tr:nth-child(even) {
 }
 
 .form-validation-error {
+    color: red;
+}
+
+.h-table-button {
+    padding: 1px;
+    background-color: transparent;
     color: red;
 }
 </style>
